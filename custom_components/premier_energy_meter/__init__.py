@@ -43,6 +43,7 @@ _LOGGER = logging.getLogger(__name__)
 _TOKEN_RE = re.compile(r'__RequestVerificationToken" type="hidden" value="([^"]+)"')
 GALLERY_DIRECTORY = "premier_energy_meter"
 GALLERY_INDEX = "index.html"
+GALLERY_URL = f"/local/{GALLERY_DIRECTORY}/{GALLERY_INDEX}?v=2"
 
 SERVICE_SCHEMA = vol.Schema(
     {
@@ -144,6 +145,11 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
                         "type": "vertical-stack",
                         "cards": [
                             {
+                                "type": "picture",
+                                "image": f"/api/brands/integration/{DOMAIN}/logo.png",
+                                "alt_text": "Premier Energy",
+                            },
+                            {
                                 "type": "picture-entity",
                                 "entity": entry.data[CONF_CAMERA_ENTITY_ID],
                                 "name": "Electricity meter",
@@ -154,9 +160,10 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
                             {"type": "entities", "entities": [number_entity_id]},
                             {
                                 "type": "grid",
-                                "columns": 2,
+                                "columns": 3,
                                 "square": True,
                                 "cards": [
+                                    {"type": "markdown", "content": ""},
                                     {
                                         "type": "button",
                                         "name": "Submit reading",
@@ -167,11 +174,12 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
                                             "data": {ATTR_CONFIG_ENTRY_ID: entry.entry_id},
                                         },
                                     },
+                                    {"type": "markdown", "content": ""},
                                 ],
                             },
                             {
                                 "type": "iframe",
-                                "url": f"/local/{GALLERY_DIRECTORY}/{GALLERY_INDEX}",
+                                "url": GALLERY_URL,
                                 "aspect_ratio": "100%",
                             },
                         ],
@@ -189,12 +197,12 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
         existing_config = await dashboard_store.async_load(False)
         view = existing_config.get("views", [{}])[0]
         cards = view.get("cards", [])
-        gallery_url = f"/local/{GALLERY_DIRECTORY}/{GALLERY_INDEX}"
         if not cards or cards[0].get("type") != "vertical-stack":
             view["cards"] = [{"type": "vertical-stack", "cards": cards}]
         cards = view["cards"][0]["cards"]
-        _remove_legacy_cards(cards, gallery_url)
-        _replace_submit_button(cards, dashboard_config["views"][0]["cards"][0]["cards"][2])
+        _remove_generated_cards(cards)
+        cards.insert(0, dashboard_config["views"][0]["cards"][0]["cards"][0])
+        cards.append(dashboard_config["views"][0]["cards"][0]["cards"][2])
         cards.append(dashboard_config["views"][0]["cards"][0]["cards"][-1])
         _LOGGER.info("Updated snapshot gallery on Lovelace dashboard /%s", DASHBOARD_URL_PATH)
         await dashboard_store.async_save(existing_config)
@@ -244,25 +252,23 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
     _LOGGER.info("Created Lovelace dashboard at /%s", DASHBOARD_URL_PATH)
 
 
-def _remove_legacy_cards(cards: list[dict], gallery_url: str) -> None:
+def _remove_generated_cards(cards: list[dict]) -> None:
     cards[:] = [
         card
         for card in cards
         if card.get("image") != f"/api/brands/integration/{DOMAIN}/logo.png"
-        and card.get("url") != gallery_url
+        and not card.get("url", "").startswith(f"/local/{GALLERY_DIRECTORY}/{GALLERY_INDEX}")
+        and not _is_submit_control(card)
     ]
     for card in cards:
-        if card.get("type") in {"vertical-stack", "horizontal-stack"}:
-            _remove_legacy_cards(card.get("cards", []), gallery_url)
+        if card.get("type") in {"vertical-stack", "horizontal-stack", "grid"}:
+            _remove_generated_cards(card.get("cards", []))
 
 
-def _replace_submit_button(cards: list[dict], submit_grid: dict) -> None:
-    for index, card in enumerate(cards):
-        if card.get("type") == "button" and card.get("name") == "Submit reading":
-            cards[index] = submit_grid
-            return
-        if card.get("type") in {"vertical-stack", "horizontal-stack"}:
-            _replace_submit_button(card.get("cards", []), submit_grid)
+def _is_submit_control(card: dict) -> bool:
+    if card.get("type") == "button" and card.get("name") == "Submit reading":
+        return True
+    return any(_is_submit_control(nested) for nested in card.get("cards", []))
 
 
 async def _async_submit_reading(hass: HomeAssistant, entry: ConfigEntry, reading: str) -> None:
@@ -313,6 +319,7 @@ def _write_snapshot_gallery(gallery_path: Path, legacy_path: Path) -> None:
     ) or "<p>No submitted snapshots yet.</p>"
     index = f"""<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="30">
 <style>body{{margin:0;padding:12px;font-family:sans-serif;background:#fafafa;color:#222}}h2{{margin:0 0 12px;font-size:18px}}.gallery{{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}}img{{width:100%;height:110px;object-fit:cover;border-radius:4px}}</style>
 </head><body><h2>Submitted snapshots</h2><div class="gallery">{image_cards}</div></body></html>"""
     (gallery_path / GALLERY_INDEX).write_text(index, encoding="utf-8")

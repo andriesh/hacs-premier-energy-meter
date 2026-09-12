@@ -11,15 +11,19 @@ cards:
       - entity: number.REPLACE_WITH_YOUR_METER_READING_ENTITY
         name: Meter reading
   - type: grid
-    columns: 2
+    columns: 3
     square: true
     cards:
+      - type: markdown
+        content: ""
       - type: button
         name: Submit reading
         icon: mdi:upload
         tap_action:
           action: perform-action
           perform_action: premier_energy_meter.submit_reading
+      - type: markdown
+        content: ""
   - type: iframe
-    url: /local/premier_energy_meter/index.html
+    url: /local/premier_energy_meter/index.html?v=2
     aspect_ratio: 100%
