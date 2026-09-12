@@ -22,9 +22,9 @@ The integration stores its credentials in Home Assistant's encrypted configurati
 
 ## Dashboard
 
-After setup, the integration creates a writable **Meter reading** number entity and a sidebar dashboard called **Premier Energy Meter**. The dashboard shows the configured live camera feed, the reading input, and a submit button. The button reads the current number entity value and submits it.
+After setup, the integration creates a writable **Meter reading** number entity and an admin-only sidebar dashboard called **Premier Energy Meter**. The dashboard shows the configured live camera feed, the reading input, and a submit button. The button reads the current number entity value and submits it.
 
-The dashboard is created only when `/premier-energy-meter` is not already present, so installing or reloading the integration never modifies an existing dashboard. [`examples/dashboard.yaml`](examples/dashboard.yaml) remains available for users who prefer a manual card.
+The dashboard is created only when `/premier-energy-meter` is not already present, so installing or reloading the integration never modifies an existing dashboard. It is automatically repaired if its metadata is missing. [`examples/dashboard.yaml`](examples/dashboard.yaml) remains available for users who prefer a manual card.
 
 The button calls the `premier_energy_meter.submit_reading` service with the helper's value. Alternatively, call the service from an automation or the Developer Tools -> Actions page:
 

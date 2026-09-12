@@ -101,7 +101,7 @@ def _get_meter_reading(hass: HomeAssistant, entry: ConfigEntry) -> str:
 
 async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
     lovelace_data = hass.data.get(LOVELACE_DATA)
-    if lovelace_data is None or DASHBOARD_URL_PATH in lovelace_data.dashboards:
+    if lovelace_data is None:
         return
 
     number_entity_id = er.async_get(hass).async_get_entity_id(
@@ -116,7 +116,7 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
         "icon": "mdi:meter-electric-outline",
         "title": DASHBOARD_TITLE,
         "url_path": DASHBOARD_URL_PATH,
-        "require_admin": False,
+        "require_admin": True,
         "show_in_sidebar": True,
         "mode": "storage",
     }
@@ -152,21 +152,35 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
         ],
     }
 
-    dashboards_store = Store(hass, 1, "lovelace_dashboards")
-    stored_dashboards = await dashboards_store.async_load() or {"items": []}
-    if any(item.get("id") == DASHBOARD_ID for item in stored_dashboards["items"]):
-        return
-    stored_dashboards["items"].append(dashboard_metadata)
-    await dashboards_store.async_save(stored_dashboards)
-
     dashboard_store = LovelaceStorage(hass, dashboard_metadata)
     await dashboard_store.async_save(dashboard_config)
+
+    dashboards_store = Store(hass, 1, "lovelace_dashboards")
+    stored_dashboards = await dashboards_store.async_load() or {"items": []}
+    dashboard_index = next(
+        (
+            index
+            for index, item in enumerate(stored_dashboards["items"])
+            if item.get("id") == DASHBOARD_ID or item.get("url_path") == DASHBOARD_URL_PATH
+        ),
+        None,
+    )
+    if dashboard_index is None:
+        stored_dashboards["items"].append(dashboard_metadata)
+    else:
+        stored_dashboards["items"][dashboard_index] = dashboard_metadata
+    await dashboards_store.async_save(stored_dashboards)
+
+    if DASHBOARD_URL_PATH in lovelace_data.dashboards:
+        _LOGGER.info("Repaired Lovelace dashboard metadata for /%s", DASHBOARD_URL_PATH)
+        return
+
     lovelace_data.dashboards[DASHBOARD_URL_PATH] = dashboard_store
     frontend.async_register_built_in_panel(
         hass,
         "lovelace",
         frontend_url_path=DASHBOARD_URL_PATH,
-        require_admin=False,
+        require_admin=True,
         show_in_sidebar=True,
         sidebar_title=DASHBOARD_TITLE,
         sidebar_icon="mdi:meter-electric-outline",
