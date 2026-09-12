@@ -25,6 +25,7 @@ from .const import (
     CONF_NLC,
     DOMAIN,
     LOGIN_URL,
+    PLATFORMS,
     SERVICE_SUBMIT_READING,
     SUBMIT_URL,
 )
@@ -63,35 +64,18 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    helper_entity_id = "input_text.premier_energy_meter_reading"
-    if hass.states.get(helper_entity_id) is None:
-        try:
-            await hass.services.async_call(
-                "input_text",
-                "create",
-                {
-                    "name": "Premier Energy meter reading",
-                    "max": 10,
-                    "mode": "text",
-                    "icon": "mdi:counter",
-                },
-                blocking=True,
-            )
-        except HomeAssistantError as err:
-            _LOGGER.warning("Could not create the meter reading helper: %s", err)
-        else:
-            _LOGGER.info("Created %s", helper_entity_id)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     await _async_notify(
         hass,
         "Premier Energy Meter configured",
-        "The meter reading helper is ready. Add the dashboard card from the integration documentation.",
+        "The meter reading entity is ready. Add the dashboard card from the integration documentation.",
     )
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    return True
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
 async def _async_submit_reading(hass: HomeAssistant, entry: ConfigEntry, reading: str) -> None:

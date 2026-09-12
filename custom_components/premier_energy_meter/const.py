@@ -1,4 +1,5 @@
 DOMAIN = "premier_energy_meter"
+PLATFORMS = ["number"]
 
 CONF_CAMERA_ENTITY_ID = "camera_entity_id"
 CONF_NLC = "nlc"
