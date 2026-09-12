@@ -185,15 +185,15 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
         gallery_url = f"/local/{GALLERY_DIRECTORY}/{GALLERY_INDEX}"
         if not cards or cards[0].get("type") != "vertical-stack":
             view["cards"] = [{"type": "vertical-stack", "cards": cards}]
-            cards = view["cards"][0]["cards"]
+        cards = view["cards"][0]["cards"]
         cards[:] = [
             card
             for card in cards
             if card.get("image") != f"/api/brands/integration/{DOMAIN}/logo.png"
+            and card.get("url") != gallery_url
         ]
-        if not any(card.get("url") == gallery_url for card in cards):
-            cards.append(dashboard_config["views"][0]["cards"][0]["cards"][-1])
-            _LOGGER.info("Added snapshot gallery to Lovelace dashboard /%s", DASHBOARD_URL_PATH)
+        cards.append(dashboard_config["views"][0]["cards"][0]["cards"][-1])
+        _LOGGER.info("Updated snapshot gallery on Lovelace dashboard /%s", DASHBOARD_URL_PATH)
         await dashboard_store.async_save(existing_config)
 
     dashboards_store = Store(hass, 1, "lovelace_dashboards")
@@ -278,7 +278,10 @@ def _write_snapshot_gallery(gallery_path: Path, legacy_path: Path) -> None:
         target = gallery_path / legacy_snapshot.name.replace("premier_energy_meter_", "meter_")
         if not target.exists():
             legacy_snapshot.replace(target)
-    snapshots = sorted(gallery_path.glob("meter_*.jpg"), reverse=True)
+    snapshots = sorted(
+        [*gallery_path.glob("meter_*.jpg"), *gallery_path.glob("premier_energy_meter_*.jpg")],
+        reverse=True,
+    )
     image_cards = "\n".join(
         f'<a href="/local/{GALLERY_DIRECTORY}/{html.escape(image.name)}" target="_blank" rel="noopener">'
         f'<img src="/local/{GALLERY_DIRECTORY}/{html.escape(image.name)}" alt="{html.escape(image.stem)}"></a>'
