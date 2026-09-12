@@ -59,5 +59,4 @@ jobs:
           gh release create "$TAG" \
             --target "$GITHUB_SHA" \
             --title "$TAG" \
-            --generate-notes \
-            --prerelease
+            --generate-notes
