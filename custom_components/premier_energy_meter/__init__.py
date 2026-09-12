@@ -136,11 +136,6 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
                         "type": "vertical-stack",
                         "cards": [
                             {
-                                "type": "picture",
-                                "image": f"/api/brands/integration/{DOMAIN}/logo.png",
-                                "alt_text": "Premier Energy",
-                            },
-                            {
                                 "type": "picture-entity",
                                 "entity": entry.data[CONF_CAMERA_ENTITY_ID],
                                 "name": "Electricity meter",
@@ -179,14 +174,15 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
         existing_config = await dashboard_store.async_load(False)
         view = existing_config.get("views", [{}])[0]
         cards = view.get("cards", [])
-        logo_url = f"/api/brands/integration/{DOMAIN}/logo.png"
         gallery_url = f"/local/{GALLERY_DIRECTORY}/{GALLERY_INDEX}"
         if not cards or cards[0].get("type") != "vertical-stack":
             view["cards"] = [{"type": "vertical-stack", "cards": cards}]
             cards = view["cards"][0]["cards"]
-        if not any(card.get("image") == logo_url for card in cards):
-            cards.insert(0, dashboard_config["views"][0]["cards"][0]["cards"][0])
-            _LOGGER.info("Added logo card to Lovelace dashboard /%s", DASHBOARD_URL_PATH)
+        cards[:] = [
+            card
+            for card in cards
+            if card.get("image") != f"/api/brands/integration/{DOMAIN}/logo.png"
+        ]
         if not any(card.get("url") == gallery_url for card in cards):
             cards.append(dashboard_config["views"][0]["cards"][0]["cards"][-1])
             _LOGGER.info("Added snapshot gallery to Lovelace dashboard /%s", DASHBOARD_URL_PATH)
@@ -264,11 +260,16 @@ async def _async_submit_reading(hass: HomeAssistant, entry: ConfigEntry, reading
 
 async def _async_write_snapshot_gallery(hass: HomeAssistant) -> None:
     gallery_path = Path(hass.config.path("www", GALLERY_DIRECTORY))
-    await hass.async_add_executor_job(_write_snapshot_gallery, gallery_path)
+    legacy_path = Path(hass.config.path("www"))
+    await hass.async_add_executor_job(_write_snapshot_gallery, gallery_path, legacy_path)
 
 
-def _write_snapshot_gallery(gallery_path: Path) -> None:
+def _write_snapshot_gallery(gallery_path: Path, legacy_path: Path) -> None:
     gallery_path.mkdir(parents=True, exist_ok=True)
+    for legacy_snapshot in legacy_path.glob("premier_energy_meter_*.jpg"):
+        target = gallery_path / legacy_snapshot.name.replace("premier_energy_meter_", "meter_")
+        if not target.exists():
+            legacy_snapshot.replace(target)
     snapshots = sorted(gallery_path.glob("meter_*.jpg"), reverse=True)
     image_cards = "\n".join(
         f'<a href="{html.escape(image.name)}" target="_blank" rel="noopener">'
