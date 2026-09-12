@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import html
 import logging
 import re
-from datetime import date
 from pathlib import Path
 
 import aiohttp
@@ -22,6 +22,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
 
 from .const import (
     ATTR_CONFIG_ENTRY_ID,
@@ -40,6 +41,8 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 _TOKEN_RE = re.compile(r'__RequestVerificationToken" type="hidden" value="([^"]+)"')
+GALLERY_DIRECTORY = "premier_energy_meter"
+GALLERY_INDEX = "index.html"
 
 SERVICE_SCHEMA = vol.Schema(
     {
@@ -76,6 +79,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await _async_write_snapshot_gallery(hass)
     await _async_create_dashboard(hass, entry)
 
     await _async_notify(
@@ -155,6 +159,11 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
                                     "data": {ATTR_CONFIG_ENTRY_ID: entry.entry_id},
                                 },
                             },
+                            {
+                                "type": "iframe",
+                                "url": f"/local/{GALLERY_DIRECTORY}/{GALLERY_INDEX}",
+                                "aspect_ratio": "100%",
+                            },
                         ],
                     },
                 ],
@@ -171,15 +180,17 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
         view = existing_config.get("views", [{}])[0]
         cards = view.get("cards", [])
         logo_url = f"/api/brands/integration/{DOMAIN}/logo.png"
+        gallery_url = f"/local/{GALLERY_DIRECTORY}/{GALLERY_INDEX}"
         if not cards or cards[0].get("type") != "vertical-stack":
             view["cards"] = [{"type": "vertical-stack", "cards": cards}]
             cards = view["cards"][0]["cards"]
         if not any(card.get("image") == logo_url for card in cards):
             cards.insert(0, dashboard_config["views"][0]["cards"][0]["cards"][0])
-            await dashboard_store.async_save(existing_config)
             _LOGGER.info("Added logo card to Lovelace dashboard /%s", DASHBOARD_URL_PATH)
-        else:
-            await dashboard_store.async_save(existing_config)
+        if not any(card.get("url") == gallery_url for card in cards):
+            cards.append(dashboard_config["views"][0]["cards"][0]["cards"][-1])
+            _LOGGER.info("Added snapshot gallery to Lovelace dashboard /%s", DASHBOARD_URL_PATH)
+        await dashboard_store.async_save(existing_config)
 
     dashboards_store = Store(hass, 1, "lovelace_dashboards")
     stored_dashboards = await dashboards_store.async_load() or {"items": []}
@@ -227,8 +238,8 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
 
 
 async def _async_submit_reading(hass: HomeAssistant, entry: ConfigEntry, reading: str) -> None:
-    snapshot_name = f"premier_energy_meter_{date.today():%Y-%m-%d}.jpg"
-    snapshot_path = Path(hass.config.path("www", snapshot_name))
+    snapshot_name = f"meter_{dt_util.now():%Y-%m-%d_%H-%M-%S}.jpg"
+    snapshot_path = Path(hass.config.path("www", GALLERY_DIRECTORY, snapshot_name))
     camera_entity_id = entry.data[CONF_CAMERA_ENTITY_ID]
 
     try:
@@ -240,12 +251,35 @@ async def _async_submit_reading(hass: HomeAssistant, entry: ConfigEntry, reading
         )
         await _async_post_reading(hass, entry, reading, snapshot_path)
     except (aiohttp.ClientError, HomeAssistantError, OSError, ValueError) as err:
+        if snapshot_path.exists():
+            await hass.async_add_executor_job(snapshot_path.unlink)
         _LOGGER.error("Premier Energy submission failed for reading %s: %s", reading, err)
         await _async_notify(hass, "Submission failed", f"Could not submit reading {reading}: {err}")
         raise HomeAssistantError(f"Premier Energy submission failed: {err}") from err
 
+    await _async_write_snapshot_gallery(hass)
     _LOGGER.info("Premier Energy reading %s submitted successfully", reading)
     await _async_notify(hass, "Meter reading submitted", f"Reading {reading} was submitted successfully.")
+
+
+async def _async_write_snapshot_gallery(hass: HomeAssistant) -> None:
+    gallery_path = Path(hass.config.path("www", GALLERY_DIRECTORY))
+    await hass.async_add_executor_job(_write_snapshot_gallery, gallery_path)
+
+
+def _write_snapshot_gallery(gallery_path: Path) -> None:
+    gallery_path.mkdir(parents=True, exist_ok=True)
+    snapshots = sorted(gallery_path.glob("meter_*.jpg"), reverse=True)
+    image_cards = "\n".join(
+        f'<a href="{html.escape(image.name)}" target="_blank" rel="noopener">'
+        f'<img src="{html.escape(image.name)}" alt="{html.escape(image.stem)}"></a>'
+        for image in snapshots
+    ) or "<p>No submitted snapshots yet.</p>"
+    index = f"""<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{{margin:0;padding:12px;font-family:sans-serif;background:#fafafa;color:#222}}h2{{margin:0 0 12px;font-size:18px}}.gallery{{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}}img{{width:100%;height:110px;object-fit:cover;border-radius:4px}}</style>
+</head><body><h2>Submitted snapshots</h2><div class="gallery">{image_cards}</div></body></html>"""
+    (gallery_path / GALLERY_INDEX).write_text(index, encoding="utf-8")
 
 
 async def _async_post_reading(hass: HomeAssistant, entry: ConfigEntry, reading: str, snapshot_path: Path) -> None:

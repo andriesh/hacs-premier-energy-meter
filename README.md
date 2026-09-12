@@ -7,6 +7,7 @@ Premier Energy Meter is a Home Assistant integration for submitting an electrici
 - Captures a current image from the configured camera.
 - Submits the image and manual reading to the Premier Energy portal.
 - Creates an admin-only **Premier Energy Meter** dashboard with the live camera feed, reading input, and submit button.
+- Keeps a clickable gallery of successfully submitted meter snapshots on the dashboard.
 - Shows a Home Assistant notification and log entry after every submission.
 
 ## Install With HACS
@@ -29,6 +30,8 @@ After setup, open **Premier Energy Meter** from the sidebar. The dashboard is av
 1. Confirm that the live camera image shows the meter.
 2. Enter the reading in **Meter reading**.
 3. Select **Submit reading**.
+
+The snapshot gallery at the bottom of the dashboard keeps images from successful submissions. Select an image to open it at full size in a new browser tab. Failed submissions are not added to the gallery.
 
 The integration creates the dashboard only when `/premier-energy-meter` does not already exist. It does not modify any other dashboard.
 
@@ -71,4 +74,4 @@ Each commit pushed to the `main` branch runs validation, full-history secret sca
 2. Select **Premier Energy Meter** and choose **Delete**.
 3. In HACS, open **Premier Energy Meter** and select **Remove**.
 
-Removing the integration does not delete snapshots already stored in Home Assistant's `www` directory or the dashboard created during setup.
+Removing the integration does not delete snapshots already stored in Home Assistant's `www/premier_energy_meter` directory or the dashboard created during setup.
