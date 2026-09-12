@@ -14,16 +14,26 @@ cards:
     columns: 3
     square: true
     cards:
-      - type: markdown
-        content: ""
+      - type: button
+        show_name: false
+        show_icon: false
+        tap_action:
+          action: none
+        hold_action:
+          action: none
       - type: button
         name: Submit reading
         icon: mdi:upload
         tap_action:
           action: perform-action
           perform_action: premier_energy_meter.submit_reading
-      - type: markdown
-        content: ""
+      - type: button
+        show_name: false
+        show_icon: false
+        tap_action:
+          action: none
+        hold_action:
+          action: none
   - type: iframe
-    url: /local/premier_energy_meter/index.html?v=2
+    url: /local/premier_energy_meter/index.html?v=3
     aspect_ratio: 100%

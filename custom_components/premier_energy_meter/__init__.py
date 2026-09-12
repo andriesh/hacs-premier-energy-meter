@@ -43,7 +43,7 @@ _LOGGER = logging.getLogger(__name__)
 _TOKEN_RE = re.compile(r'__RequestVerificationToken" type="hidden" value="([^"]+)"')
 GALLERY_DIRECTORY = "premier_energy_meter"
 GALLERY_INDEX = "index.html"
-GALLERY_URL = f"/local/{GALLERY_DIRECTORY}/{GALLERY_INDEX}?v=2"
+GALLERY_URL = f"/local/{GALLERY_DIRECTORY}/{GALLERY_INDEX}?v=3"
 
 SERVICE_SCHEMA = vol.Schema(
     {
@@ -163,7 +163,7 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
                                 "columns": 3,
                                 "square": True,
                                 "cards": [
-                                    {"type": "markdown", "content": ""},
+                                    _dashboard_spacer_card(),
                                     {
                                         "type": "button",
                                         "name": "Submit reading",
@@ -174,7 +174,7 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
                                             "data": {ATTR_CONFIG_ENTRY_ID: entry.entry_id},
                                         },
                                     },
-                                    {"type": "markdown", "content": ""},
+                                    _dashboard_spacer_card(),
                                 ],
                             },
                             {
@@ -271,6 +271,16 @@ def _is_submit_control(card: dict) -> bool:
     return any(_is_submit_control(nested) for nested in card.get("cards", []))
 
 
+def _dashboard_spacer_card() -> dict:
+    return {
+        "type": "button",
+        "show_name": False,
+        "show_icon": False,
+        "tap_action": {"action": "none"},
+        "hold_action": {"action": "none"},
+    }
+
+
 async def _async_submit_reading(hass: HomeAssistant, entry: ConfigEntry, reading: str) -> None:
     snapshot_name = f"meter_{dt_util.now():%Y-%m-%d_%H-%M-%S}.jpg"
     snapshot_path = Path(hass.config.path("www", GALLERY_DIRECTORY, snapshot_name))
@@ -317,7 +327,7 @@ def _write_snapshot_gallery(gallery_path: Path, legacy_path: Path) -> None:
     index = f"""<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="refresh" content="30">
-<style>body{{margin:0;padding:12px;font-family:sans-serif;background:#fafafa;color:#222}}h2{{margin:0 0 12px;font-size:18px}}.gallery{{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}}img{{width:100%;height:110px;object-fit:cover;border-radius:4px}}</style>
+<style>:root{{color-scheme:light dark}}body{{margin:0;padding:12px;font-family:sans-serif;background:#fafafa;color:#222}}h2{{margin:0 0 12px;font-size:18px}}.gallery{{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}}img{{width:100%;height:110px;object-fit:cover;border-radius:4px}}@media (prefers-color-scheme:dark){{body{{background:#1c1c1c;color:#eee}}}}</style>
 </head><body><h2>Submitted snapshots</h2><div class="gallery">{image_cards}</div></body></html>"""
     (gallery_path / GALLERY_INDEX).write_text(index, encoding="utf-8")
 
