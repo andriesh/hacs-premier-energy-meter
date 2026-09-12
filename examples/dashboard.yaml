@@ -10,12 +10,16 @@ cards:
     entities:
       - entity: number.REPLACE_WITH_YOUR_METER_READING_ENTITY
         name: Meter reading
-  - type: button
-    name: Submit reading
-    icon: mdi:upload
-    tap_action:
-      action: perform-action
-      perform_action: premier_energy_meter.submit_reading
+  - type: grid
+    columns: 2
+    square: true
+    cards:
+      - type: button
+        name: Submit reading
+        icon: mdi:upload
+        tap_action:
+          action: perform-action
+          perform_action: premier_energy_meter.submit_reading
   - type: iframe
     url: /local/premier_energy_meter/index.html
     aspect_ratio: 100%

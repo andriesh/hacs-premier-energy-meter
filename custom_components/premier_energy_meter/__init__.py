@@ -153,14 +153,21 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
                             },
                             {"type": "entities", "entities": [number_entity_id]},
                             {
-                                "type": "button",
-                                "name": "Submit reading",
-                                "icon": "mdi:upload",
-                                "tap_action": {
-                                    "action": "perform-action",
-                                    "perform_action": f"{DOMAIN}.{SERVICE_SUBMIT_READING}",
-                                    "data": {ATTR_CONFIG_ENTRY_ID: entry.entry_id},
-                                },
+                                "type": "grid",
+                                "columns": 2,
+                                "square": True,
+                                "cards": [
+                                    {
+                                        "type": "button",
+                                        "name": "Submit reading",
+                                        "icon": "mdi:upload",
+                                        "tap_action": {
+                                            "action": "perform-action",
+                                            "perform_action": f"{DOMAIN}.{SERVICE_SUBMIT_READING}",
+                                            "data": {ATTR_CONFIG_ENTRY_ID: entry.entry_id},
+                                        },
+                                    },
+                                ],
                             },
                             {
                                 "type": "iframe",
@@ -186,12 +193,8 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
         if not cards or cards[0].get("type") != "vertical-stack":
             view["cards"] = [{"type": "vertical-stack", "cards": cards}]
         cards = view["cards"][0]["cards"]
-        cards[:] = [
-            card
-            for card in cards
-            if card.get("image") != f"/api/brands/integration/{DOMAIN}/logo.png"
-            and card.get("url") != gallery_url
-        ]
+        _remove_legacy_cards(cards, gallery_url)
+        _replace_submit_button(cards, dashboard_config["views"][0]["cards"][0]["cards"][2])
         cards.append(dashboard_config["views"][0]["cards"][0]["cards"][-1])
         _LOGGER.info("Updated snapshot gallery on Lovelace dashboard /%s", DASHBOARD_URL_PATH)
         await dashboard_store.async_save(existing_config)
@@ -239,6 +242,27 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
         config={"mode": "storage"},
     )
     _LOGGER.info("Created Lovelace dashboard at /%s", DASHBOARD_URL_PATH)
+
+
+def _remove_legacy_cards(cards: list[dict], gallery_url: str) -> None:
+    cards[:] = [
+        card
+        for card in cards
+        if card.get("image") != f"/api/brands/integration/{DOMAIN}/logo.png"
+        and card.get("url") != gallery_url
+    ]
+    for card in cards:
+        if card.get("type") in {"vertical-stack", "horizontal-stack"}:
+            _remove_legacy_cards(card.get("cards", []), gallery_url)
+
+
+def _replace_submit_button(cards: list[dict], submit_grid: dict) -> None:
+    for index, card in enumerate(cards):
+        if card.get("type") == "button" and card.get("name") == "Submit reading":
+            cards[index] = submit_grid
+            return
+        if card.get("type") in {"vertical-stack", "horizontal-stack"}:
+            _replace_submit_button(card.get("cards", []), submit_grid)
 
 
 async def _async_submit_reading(hass: HomeAssistant, entry: ConfigEntry, reading: str) -> None:
