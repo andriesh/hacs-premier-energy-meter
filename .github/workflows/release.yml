@@ -1,0 +1,47 @@
+name: Validate and release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Validate integration files
+        run: |
+          python -m compileall -q custom_components
+          python -m json.tool hacs.json > /dev/null
+          python -m json.tool custom_components/premier_energy_meter/manifest.json > /dev/null
+          python -m json.tool custom_components/premier_energy_meter/translations/en.json > /dev/null
+
+      - name: Read manifest version
+        id: version
+        run: |
+          VERSION=$(python -c 'import json; print(json.load(open("custom_components/premier_energy_meter/manifest.json"))["version"])')
+          echo "value=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.version.outputs.value }}-build.${{ github.run_number }}
+        run: |
+          gh release create "$TAG" \
+            --target "$GITHUB_SHA" \
+            --title "$TAG" \
+            --generate-notes \
+            --prerelease

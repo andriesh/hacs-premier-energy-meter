@@ -1,32 +1,44 @@
 # Premier Energy Meter
 
-A Home Assistant custom integration that submits a manual electricity meter reading and a fresh snapshot from a configured camera to Premier Energy Moldova.
+Premier Energy Meter is a Home Assistant integration for submitting an electricity meter reading to Premier Energy Moldova. It sends the manually entered reading together with a fresh JPEG snapshot from your meter camera.
 
-## What It Does
+## Features
 
-1. Takes a JPEG snapshot from the selected Home Assistant camera.
-2. Logs into the Premier Energy portal and submits the reading and photo.
-3. Shows a Home Assistant persistent notification and writes the result to the Home Assistant log.
+- Captures a current image from the configured camera.
+- Submits the image and manual reading to the Premier Energy portal.
+- Creates an admin-only **Premier Energy Meter** dashboard with the live camera feed, reading input, and submit button.
+- Shows a Home Assistant notification and log entry after every submission.
 
-The integration stores its credentials in Home Assistant's encrypted configuration-entry storage. It does not use `.env`, Docker Compose variables, shell commands, OCR, or the mock services.
+## Install With HACS
 
-## HACS Installation
+Before installing, configure a Generic Camera integration in Home Assistant with the live video stream from the electricity meter. Verify that its live view works and that the meter digits are clearly visible.
 
-1. Push this repository to GitHub. Before publishing, replace `@YOUR_GITHUB_USERNAME` and the example GitHub URLs in `custom_components/premier_energy_meter/manifest.json`.
-2. In Home Assistant, open HACS, then **Integrations**.
-3. Open the three-dot menu, select **Custom repositories**, and add your GitHub repository URL with category **Integration**.
-4. Search for **Premier Energy Meter** in HACS and install it.
+1. Open **HACS** in Home Assistant and select **Integrations**.
+2. Open the three-dot menu and choose **Custom repositories**.
+3. Add this repository's GitHub URL with category **Integration**.
+4. Search for **Premier Energy Meter** and select **Download**.
 5. Restart Home Assistant.
-6. Go to **Settings** -> **Devices & services** -> **Add integration** -> **Premier Energy Meter**.
-7. Enter the portal username/password, NLC, and select the camera pointing at your meter.
+6. Go to **Settings** -> **Devices & services** -> **Add integration**.
+7. Select **Premier Energy Meter**.
+8. Enter your Premier Energy username, password, NLC, and select the preconfigured Generic Camera that faces your electricity meter.
 
-## Dashboard
+## Use The Dashboard
 
-After setup, the integration creates a writable **Meter reading** number entity and an admin-only sidebar dashboard called **Premier Energy Meter**. The dashboard shows the configured live camera feed, the reading input, and a submit button. The button reads the current number entity value and submits it.
+After setup, open **Premier Energy Meter** from the sidebar. The dashboard is available only to Home Assistant administrators.
 
-The dashboard is created only when `/premier-energy-meter` is not already present, so installing or reloading the integration never modifies an existing dashboard. It is automatically repaired if its metadata is missing. [`examples/dashboard.yaml`](examples/dashboard.yaml) remains available for users who prefer a manual card.
+1. Confirm that the live camera image shows the meter.
+2. Enter the reading in **Meter reading**.
+3. Select **Submit reading**.
 
-The button calls the `premier_energy_meter.submit_reading` service with the helper's value. Alternatively, call the service from an automation or the Developer Tools -> Actions page:
+The integration creates the dashboard only when `/premier-energy-meter` does not already exist. It does not modify any other dashboard.
+
+## Repeat Submissions
+
+The integration does not impose a submission limit. Premier Energy may reject, ignore, or restrict repeated readings according to the billing period and its portal rules. Submit only after checking the displayed reading and notification result; do not retry automatically or submit the same reading repeatedly unless Premier Energy instructs you to do so.
+
+## Submit From An Automation
+
+Call the `premier_energy_meter.submit_reading` action and provide a digits-only reading:
 
 ```yaml
 action: premier_energy_meter.submit_reading
@@ -34,14 +46,29 @@ data:
   reading: "12345"
 ```
 
-## Logs And Confirmation
+When a single Premier Energy Meter entry is configured, `reading` may be omitted and the integration uses the value shown in its **Meter reading** entity.
 
-After each request, Home Assistant shows a persistent notification. It also writes success/failure entries under the `custom_components.premier_energy_meter` logger in **Settings** -> **System** -> **Logs**.
+## Check Submission Status
 
-## Development Installation
+Home Assistant shows a persistent notification after each attempt. For technical details, open **Settings** -> **System** -> **Logs** and look for `custom_components.premier_energy_meter`.
 
-For local testing, copy `custom_components/premier_energy_meter/` to `<Home Assistant config>/custom_components/premier_energy_meter/`, restart Home Assistant, and add the integration through the UI.
+## Update
 
-## Notes
+1. Open **HACS** -> **Integrations**.
+2. Select **Premier Energy Meter**.
+3. Select **Update** or **Redownload**.
+4. Restart Home Assistant.
 
-Premier Energy's portal is an external service; changes to its login form or submission endpoint may require an integration update. Do not commit real account credentials, Home Assistant configuration directories, snapshots, or the `src/` scrape directory.
+Your configured credentials and camera selection remain in place after an update.
+
+## Releases
+
+Each commit pushed to the `main` branch runs the validation workflow and creates a GitHub prerelease tag in the form `v<manifest-version>-build.<run-number>`, for example `v0.1.0-build.42`. Update the `version` in `custom_components/premier_energy_meter/manifest.json` before a release when the integration version changes.
+
+## Remove
+
+1. Go to **Settings** -> **Devices & services**.
+2. Select **Premier Energy Meter** and choose **Delete**.
+3. In HACS, open **Premier Energy Meter** and select **Remove**.
+
+Removing the integration does not delete snapshots already stored in Home Assistant's `www` directory or the dashboard created during setup.
