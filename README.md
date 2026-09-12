@@ -63,7 +63,7 @@ Your configured credentials and camera selection remain in place after an update
 
 ## Releases
 
-Each commit pushed to the `main` branch runs the validation workflow and creates a GitHub prerelease tag in the form `v<manifest-version>-build.<run-number>`, for example `v0.1.0-build.42`. Update the `version` in `custom_components/premier_energy_meter/manifest.json` before a release when the integration version changes.
+Each commit pushed to the `main` branch runs validation, full-history secret scanning, and Python static security analysis. A failed security check prevents a GitHub release. Successful runs create a GitHub prerelease tag in the form `v<manifest-version>-build.<run-number>`, for example `v0.1.0-build.42`. Update the `version` in `custom_components/premier_energy_meter/manifest.json` before a release when the integration version changes.
 
 ## Remove
 
