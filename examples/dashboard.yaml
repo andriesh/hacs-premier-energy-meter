@@ -1,5 +1,8 @@
 type: vertical-stack
 cards:
+  - type: picture
+    image: /api/brands/integration/premier_energy_meter/logo.png
+    alt_text: Premier Energy
   - type: picture-entity
     entity: camera.REPLACE_WITH_YOUR_CAMERA_ENTITY
     name: Electricity meter

@@ -129,6 +129,11 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
                 "icon": "mdi:meter-electric-outline",
                 "cards": [
                     {
+                        "type": "picture",
+                        "image": f"/api/brands/integration/{DOMAIN}/logo.png",
+                        "alt_text": "Premier Energy",
+                    },
+                    {
                         "type": "picture-entity",
                         "entity": entry.data[CONF_CAMERA_ENTITY_ID],
                         "name": "Electricity meter",
@@ -152,8 +157,18 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
         ],
     }
 
-    dashboard_store = LovelaceStorage(hass, dashboard_metadata)
-    await dashboard_store.async_save(dashboard_config)
+    dashboard_store = lovelace_data.dashboards.get(DASHBOARD_URL_PATH)
+    if dashboard_store is None:
+        dashboard_store = LovelaceStorage(hass, dashboard_metadata)
+        await dashboard_store.async_save(dashboard_config)
+    else:
+        existing_config = await dashboard_store.async_load(False)
+        cards = existing_config.get("views", [{}])[0].get("cards", [])
+        logo_url = f"/api/brands/integration/{DOMAIN}/logo.png"
+        if not any(card.get("image") == logo_url for card in cards):
+            cards.insert(0, dashboard_config["views"][0]["cards"][0])
+            await dashboard_store.async_save(existing_config)
+            _LOGGER.info("Added logo card to Lovelace dashboard /%s", DASHBOARD_URL_PATH)
 
     dashboards_store = Store(hass, 1, "lovelace_dashboards")
     stored_dashboards = await dashboards_store.async_load() or {"items": []}
@@ -172,6 +187,17 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
     await dashboards_store.async_save(stored_dashboards)
 
     if DASHBOARD_URL_PATH in lovelace_data.dashboards:
+        frontend.async_register_built_in_panel(
+            hass,
+            "lovelace",
+            frontend_url_path=DASHBOARD_URL_PATH,
+            require_admin=True,
+            show_in_sidebar=True,
+            sidebar_title=DASHBOARD_TITLE,
+            sidebar_icon="mdi:meter-electric-outline",
+            config={"mode": "storage"},
+            update=True,
+        )
         _LOGGER.info("Repaired Lovelace dashboard metadata for /%s", DASHBOARD_URL_PATH)
         return
 
