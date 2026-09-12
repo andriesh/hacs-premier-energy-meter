@@ -11,18 +11,26 @@ import aiohttp
 import voluptuous as vol
 
 from homeassistant.components.camera import DOMAIN as CAMERA_DOMAIN, SERVICE_SNAPSHOT
+from homeassistant.components import frontend
+from homeassistant.components.lovelace.const import LOVELACE_DATA
+from homeassistant.components.lovelace.dashboard import LovelaceStorage
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.storage import Store
 
 from .const import (
     ATTR_CONFIG_ENTRY_ID,
     ATTR_READING,
     CONF_CAMERA_ENTITY_ID,
     CONF_NLC,
+    DASHBOARD_ID,
+    DASHBOARD_TITLE,
+    DASHBOARD_URL_PATH,
     DOMAIN,
     LOGIN_URL,
     PLATFORMS,
@@ -35,7 +43,7 @@ _TOKEN_RE = re.compile(r'__RequestVerificationToken" type="hidden" value="([^"]+
 
 SERVICE_SCHEMA = vol.Schema(
     {
-        vol.Required(ATTR_READING): cv.string,
+        vol.Optional(ATTR_READING): cv.string,
         vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
     }
 )
@@ -53,7 +61,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         if entry is None:
             raise HomeAssistantError("Specify config_entry_id when more than one Premier Energy account is configured")
 
-        reading = call.data[ATTR_READING].strip()
+        reading = call.data.get(ATTR_READING)
+        if reading is None:
+            reading = _get_meter_reading(hass, entry)
+        reading = reading.strip()
         if not reading.isdigit():
             raise HomeAssistantError("Reading must contain digits only")
 
@@ -65,6 +76,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await _async_create_dashboard(hass, entry)
 
     await _async_notify(
         hass,
@@ -76,6 +88,91 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+def _get_meter_reading(hass: HomeAssistant, entry: ConfigEntry) -> str:
+    entity_id = er.async_get(hass).async_get_entity_id(
+        "number", DOMAIN, f"{entry.entry_id}_meter_reading"
+    )
+    if entity_id is None or (state := hass.states.get(entity_id)) is None:
+        raise HomeAssistantError("Meter reading entity is unavailable")
+    return state.state
+
+
+async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    lovelace_data = hass.data.get(LOVELACE_DATA)
+    if lovelace_data is None or DASHBOARD_URL_PATH in lovelace_data.dashboards:
+        return
+
+    number_entity_id = er.async_get(hass).async_get_entity_id(
+        "number", DOMAIN, f"{entry.entry_id}_meter_reading"
+    )
+    if number_entity_id is None:
+        _LOGGER.warning("Could not determine the meter reading entity ID for dashboard setup")
+        return
+
+    dashboard_metadata = {
+        "id": DASHBOARD_ID,
+        "icon": "mdi:meter-electric-outline",
+        "title": DASHBOARD_TITLE,
+        "url_path": DASHBOARD_URL_PATH,
+        "require_admin": False,
+        "show_in_sidebar": True,
+        "mode": "storage",
+    }
+    dashboard_config = {
+        "title": DASHBOARD_TITLE,
+        "views": [
+            {
+                "title": "Meter",
+                "path": "meter",
+                "icon": "mdi:meter-electric-outline",
+                "cards": [
+                    {
+                        "type": "picture-entity",
+                        "entity": entry.data[CONF_CAMERA_ENTITY_ID],
+                        "name": "Electricity meter",
+                        "camera_view": "live",
+                        "show_state": False,
+                        "show_name": True,
+                    },
+                    {"type": "entities", "entities": [number_entity_id]},
+                    {
+                        "type": "button",
+                        "name": "Submit reading",
+                        "icon": "mdi:upload",
+                        "tap_action": {
+                            "action": "perform-action",
+                            "perform_action": f"{DOMAIN}.{SERVICE_SUBMIT_READING}",
+                            "data": {ATTR_CONFIG_ENTRY_ID: entry.entry_id},
+                        },
+                    },
+                ],
+            }
+        ],
+    }
+
+    dashboards_store = Store(hass, 1, "lovelace_dashboards")
+    stored_dashboards = await dashboards_store.async_load() or {"items": []}
+    if any(item.get("id") == DASHBOARD_ID for item in stored_dashboards["items"]):
+        return
+    stored_dashboards["items"].append(dashboard_metadata)
+    await dashboards_store.async_save(stored_dashboards)
+
+    dashboard_store = LovelaceStorage(hass, dashboard_metadata)
+    await dashboard_store.async_save(dashboard_config)
+    lovelace_data.dashboards[DASHBOARD_URL_PATH] = dashboard_store
+    frontend.async_register_built_in_panel(
+        hass,
+        "lovelace",
+        frontend_url_path=DASHBOARD_URL_PATH,
+        require_admin=False,
+        show_in_sidebar=True,
+        sidebar_title=DASHBOARD_TITLE,
+        sidebar_icon="mdi:meter-electric-outline",
+        config={"mode": "storage"},
+    )
+    _LOGGER.info("Created Lovelace dashboard at /%s", DASHBOARD_URL_PATH)
 
 
 async def _async_submit_reading(hass: HomeAssistant, entry: ConfigEntry, reading: str) -> None:

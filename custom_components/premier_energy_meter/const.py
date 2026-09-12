@@ -1,5 +1,8 @@
 DOMAIN = "premier_energy_meter"
 PLATFORMS = ["number"]
+DASHBOARD_ID = "premier_energy_meter"
+DASHBOARD_TITLE = "Premier Energy Meter"
+DASHBOARD_URL_PATH = "premier-energy-meter"
 
 CONF_CAMERA_ENTITY_ID = "camera_entity_id"
 CONF_NLC = "nlc"

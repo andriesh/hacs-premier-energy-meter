@@ -22,9 +22,9 @@ The integration stores its credentials in Home Assistant's encrypted configurati
 
 ## Dashboard
 
-After setup, the integration automatically creates a writable **Meter reading** number entity under the Premier Energy Meter device. It also displays a persistent notification confirming that setup completed. Entity IDs can vary, so select this entity from the dashboard editor if its generated ID differs from the example.
+After setup, the integration creates a writable **Meter reading** number entity and a sidebar dashboard called **Premier Energy Meter**. The dashboard shows the configured live camera feed, the reading input, and a submit button. The button reads the current number entity value and submits it.
 
-Home Assistant does not provide custom integrations with a supported API for creating or modifying a user's Lovelace dashboards. This protects existing dashboard configuration. Add a Manual card using [`examples/dashboard.yaml`](examples/dashboard.yaml), replacing `camera.REPLACE_WITH_YOUR_CAMERA_ENTITY` with the camera entity configured in the integration.
+The dashboard is created only when `/premier-energy-meter` is not already present, so installing or reloading the integration never modifies an existing dashboard. [`examples/dashboard.yaml`](examples/dashboard.yaml) remains available for users who prefer a manual card.
 
 The button calls the `premier_energy_meter.submit_reading` service with the helper's value. Alternatively, call the service from an automation or the Developer Tools -> Actions page:
 
