@@ -129,28 +129,33 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
                 "icon": "mdi:meter-electric-outline",
                 "cards": [
                     {
-                        "type": "picture",
-                        "image": f"/api/brands/integration/{DOMAIN}/logo.png",
-                        "alt_text": "Premier Energy",
-                    },
-                    {
-                        "type": "picture-entity",
-                        "entity": entry.data[CONF_CAMERA_ENTITY_ID],
-                        "name": "Electricity meter",
-                        "camera_view": "live",
-                        "show_state": False,
-                        "show_name": True,
-                    },
-                    {"type": "entities", "entities": [number_entity_id]},
-                    {
-                        "type": "button",
-                        "name": "Submit reading",
-                        "icon": "mdi:upload",
-                        "tap_action": {
-                            "action": "perform-action",
-                            "perform_action": f"{DOMAIN}.{SERVICE_SUBMIT_READING}",
-                            "data": {ATTR_CONFIG_ENTRY_ID: entry.entry_id},
-                        },
+                        "type": "vertical-stack",
+                        "cards": [
+                            {
+                                "type": "picture",
+                                "image": f"/api/brands/integration/{DOMAIN}/logo.png",
+                                "alt_text": "Premier Energy",
+                            },
+                            {
+                                "type": "picture-entity",
+                                "entity": entry.data[CONF_CAMERA_ENTITY_ID],
+                                "name": "Electricity meter",
+                                "camera_view": "live",
+                                "show_state": False,
+                                "show_name": True,
+                            },
+                            {"type": "entities", "entities": [number_entity_id]},
+                            {
+                                "type": "button",
+                                "name": "Submit reading",
+                                "icon": "mdi:upload",
+                                "tap_action": {
+                                    "action": "perform-action",
+                                    "perform_action": f"{DOMAIN}.{SERVICE_SUBMIT_READING}",
+                                    "data": {ATTR_CONFIG_ENTRY_ID: entry.entry_id},
+                                },
+                            },
+                        ],
                     },
                 ],
             }
@@ -163,12 +168,18 @@ async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> No
         await dashboard_store.async_save(dashboard_config)
     else:
         existing_config = await dashboard_store.async_load(False)
-        cards = existing_config.get("views", [{}])[0].get("cards", [])
+        view = existing_config.get("views", [{}])[0]
+        cards = view.get("cards", [])
         logo_url = f"/api/brands/integration/{DOMAIN}/logo.png"
+        if not cards or cards[0].get("type") != "vertical-stack":
+            view["cards"] = [{"type": "vertical-stack", "cards": cards}]
+            cards = view["cards"][0]["cards"]
         if not any(card.get("image") == logo_url for card in cards):
-            cards.insert(0, dashboard_config["views"][0]["cards"][0])
+            cards.insert(0, dashboard_config["views"][0]["cards"][0]["cards"][0])
             await dashboard_store.async_save(existing_config)
             _LOGGER.info("Added logo card to Lovelace dashboard /%s", DASHBOARD_URL_PATH)
+        else:
+            await dashboard_store.async_save(existing_config)
 
     dashboards_store = Store(hass, 1, "lovelace_dashboards")
     stored_dashboards = await dashboards_store.async_load() or {"items": []}
