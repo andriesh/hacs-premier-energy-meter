@@ -22,9 +22,9 @@ The integration stores its credentials in Home Assistant's encrypted configurati
 
 ## Dashboard
 
-Create an `input_text` helper in **Settings** -> **Devices & services** -> **Helpers** with entity ID `input_text.manual_meter_reading`.
+After setup, the integration automatically creates `input_text.premier_energy_meter_reading`. It also displays a persistent notification confirming that setup completed.
 
-Add a Manual card to your dashboard using [`examples/dashboard.yaml`](examples/dashboard.yaml). Replace `camera.REPLACE_WITH_YOUR_CAMERA_ENTITY` with the camera entity configured in the integration.
+Home Assistant does not provide custom integrations with a supported API for creating or modifying a user's Lovelace dashboards. This protects existing dashboard configuration. Add a Manual card using [`examples/dashboard.yaml`](examples/dashboard.yaml), replacing `camera.REPLACE_WITH_YOUR_CAMERA_ENTITY` with the camera entity configured in the integration.
 
 The button calls the `premier_energy_meter.submit_reading` service with the helper's value. Alternatively, call the service from an automation or the Developer Tools -> Actions page:
 

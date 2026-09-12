@@ -63,6 +63,30 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    helper_entity_id = "input_text.premier_energy_meter_reading"
+    if hass.states.get(helper_entity_id) is None:
+        try:
+            await hass.services.async_call(
+                "input_text",
+                "create",
+                {
+                    "name": "Premier Energy meter reading",
+                    "max": 10,
+                    "mode": "text",
+                    "icon": "mdi:counter",
+                },
+                blocking=True,
+            )
+        except HomeAssistantError as err:
+            _LOGGER.warning("Could not create the meter reading helper: %s", err)
+        else:
+            _LOGGER.info("Created %s", helper_entity_id)
+
+    await _async_notify(
+        hass,
+        "Premier Energy Meter configured",
+        "The meter reading helper is ready. Add the dashboard card from the integration documentation.",
+    )
     return True
 
 
