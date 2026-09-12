@@ -1,0 +1,132 @@
+from __future__ import annotations
+
+import asyncio
+import base64
+import logging
+import re
+from datetime import date
+from pathlib import Path
+
+import aiohttp
+import voluptuous as vol
+
+from homeassistant.components.camera import DOMAIN as CAMERA_DOMAIN, SERVICE_SNAPSHOT
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers import config_validation as cv
+
+from .const import (
+    ATTR_CONFIG_ENTRY_ID,
+    ATTR_READING,
+    CONF_CAMERA_ENTITY_ID,
+    CONF_NLC,
+    DOMAIN,
+    LOGIN_URL,
+    SERVICE_SUBMIT_READING,
+    SUBMIT_URL,
+)
+
+_LOGGER = logging.getLogger(__name__)
+_TOKEN_RE = re.compile(r'__RequestVerificationToken" type="hidden" value="([^"]+)"')
+
+SERVICE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_READING): cv.string,
+        vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
+    }
+)
+
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    hass.data.setdefault(DOMAIN, {})
+
+    async def handle_submit(call: ServiceCall) -> None:
+        entries = hass.config_entries.async_entries(DOMAIN)
+        entry_id = call.data.get(ATTR_CONFIG_ENTRY_ID)
+        entry = next((item for item in entries if item.entry_id == entry_id), None) if entry_id else None
+        if entry is None and len(entries) == 1:
+            entry = entries[0]
+        if entry is None:
+            raise HomeAssistantError("Specify config_entry_id when more than one Premier Energy account is configured")
+
+        reading = call.data[ATTR_READING].strip()
+        if not reading.isdigit():
+            raise HomeAssistantError("Reading must contain digits only")
+
+        await _async_submit_reading(hass, entry, reading)
+
+    hass.services.async_register(DOMAIN, SERVICE_SUBMIT_READING, handle_submit, schema=SERVICE_SCHEMA)
+    return True
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    return True
+
+
+async def _async_submit_reading(hass: HomeAssistant, entry: ConfigEntry, reading: str) -> None:
+    snapshot_name = f"premier_energy_meter_{date.today():%Y-%m-%d}.jpg"
+    snapshot_path = Path(hass.config.path("www", snapshot_name))
+    camera_entity_id = entry.data[CONF_CAMERA_ENTITY_ID]
+
+    try:
+        await hass.services.async_call(
+            CAMERA_DOMAIN,
+            SERVICE_SNAPSHOT,
+            {"entity_id": camera_entity_id, "filename": str(snapshot_path)},
+            blocking=True,
+        )
+        await _async_post_reading(hass, entry, reading, snapshot_path)
+    except (aiohttp.ClientError, HomeAssistantError, OSError, ValueError) as err:
+        _LOGGER.error("Premier Energy submission failed for reading %s: %s", reading, err)
+        await _async_notify(hass, "Submission failed", f"Could not submit reading {reading}: {err}")
+        raise HomeAssistantError(f"Premier Energy submission failed: {err}") from err
+
+    _LOGGER.info("Premier Energy reading %s submitted successfully", reading)
+    await _async_notify(hass, "Meter reading submitted", f"Reading {reading} was submitted successfully.")
+
+
+async def _async_post_reading(hass: HomeAssistant, entry: ConfigEntry, reading: str, snapshot_path: Path) -> None:
+    session = async_get_clientsession(hass)
+    async with session.get(LOGIN_URL, allow_redirects=True) as response:
+        response.raise_for_status()
+        login_page = await response.text()
+
+    token_match = _TOKEN_RE.search(login_page)
+    if token_match is None:
+        raise ValueError("Premier Energy login anti-forgery token was not found")
+
+    login_payload = {
+        "__RequestVerificationToken": token_match.group(1),
+        "User": entry.data[CONF_USERNAME],
+        "Password": entry.data[CONF_PASSWORD],
+    }
+    async with session.post(LOGIN_URL, data=login_payload, allow_redirects=True) as response:
+        response.raise_for_status()
+
+    image_data = await asyncio.to_thread(snapshot_path.read_bytes)
+    data_url = "data:image/jpeg;base64," + base64.b64encode(image_data).decode("ascii")
+    submit_payload = {
+        "f_indactiv": reading,
+        "NLC": entry.data[CONF_NLC],
+        "Base64": data_url,
+        "file.Type": "image/jpeg",
+        "file.Name": snapshot_path.name,
+    }
+    async with session.post(SUBMIT_URL, data=submit_payload) as response:
+        response.raise_for_status()
+
+
+async def _async_notify(hass: HomeAssistant, title: str, message: str) -> None:
+    await hass.services.async_call(
+        "persistent_notification",
+        "create",
+        {"title": title, "message": message, "notification_id": DOMAIN},
+        blocking=False,
+    )

@@ -1,0 +1,17 @@
+submit_reading:
+  name: Submit meter reading
+  description: Takes a fresh camera snapshot and submits it with a manual reading to Premier Energy.
+  fields:
+    reading:
+      name: Reading
+      description: The electricity meter reading, containing digits only.
+      required: true
+      selector:
+        text:
+    config_entry_id:
+      name: Configuration entry
+      description: Required only when multiple Premier Energy accounts are configured.
+      required: false
+      selector:
+        config_entry:
+          integration: premier_energy_meter

@@ -1,0 +1,19 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Premier Energy Meter",
+        "description": "Enter the credentials and meter details for your Premier Energy account.",
+        "data": {
+          "username": "Username",
+          "password": "Password",
+          "nlc": "NLC",
+          "camera_entity_id": "Meter camera"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This NLC is already configured."
+    }
+  }
+}
