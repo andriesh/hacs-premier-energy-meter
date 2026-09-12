@@ -308,10 +308,7 @@ def _write_snapshot_gallery(gallery_path: Path, legacy_path: Path) -> None:
         target = gallery_path / legacy_snapshot.name.replace("premier_energy_meter_", "meter_")
         if not target.exists():
             legacy_snapshot.replace(target)
-    snapshots = sorted(
-        [*gallery_path.glob("meter_*.jpg"), *gallery_path.glob("premier_energy_meter_*.jpg")],
-        reverse=True,
-    )
+    snapshots = sorted(gallery_path.glob("*.jpg"), reverse=True)
     image_cards = "\n".join(
         f'<a href="/local/{GALLERY_DIRECTORY}/{html.escape(image.name)}" target="_blank" rel="noopener">'
         f'<img src="/local/{GALLERY_DIRECTORY}/{html.escape(image.name)}" alt="{html.escape(image.stem)}"></a>'
