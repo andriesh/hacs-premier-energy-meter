@@ -24,6 +24,7 @@ class PremierEnergyMeterReading(NumberEntity):
     _attr_native_max_value = 9_999_999_999
     _attr_native_min_value = 0
     _attr_native_step = 1
+    _attr_suggested_display_precision = 0
 
     def __init__(self, entry: ConfigEntry) -> None:
         self._attr_unique_id = f"{entry.entry_id}_meter_reading"
@@ -34,5 +35,7 @@ class PremierEnergyMeterReading(NumberEntity):
         self._attr_native_value = 0
 
     async def async_set_native_value(self, value: float) -> None:
-        self._attr_native_value = value
+        if not float(value).is_integer():
+            return
+        self._attr_native_value = int(value)
         self.async_write_ha_state()

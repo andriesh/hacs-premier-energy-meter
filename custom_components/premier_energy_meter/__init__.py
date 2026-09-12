@@ -64,12 +64,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         if entry is None:
             raise HomeAssistantError("Specify config_entry_id when more than one Premier Energy account is configured")
 
-        reading = call.data.get(ATTR_READING)
-        if reading is None:
-            reading = _get_meter_reading(hass, entry)
-        reading = reading.strip()
-        if not reading.isdigit():
-            raise HomeAssistantError("Reading must contain digits only")
+        reading = _normalize_reading(call.data.get(ATTR_READING) or _get_meter_reading(hass, entry))
 
         await _async_submit_reading(hass, entry, reading)
 
@@ -101,6 +96,19 @@ def _get_meter_reading(hass: HomeAssistant, entry: ConfigEntry) -> str:
     if entity_id is None or (state := hass.states.get(entity_id)) is None:
         raise HomeAssistantError("Meter reading entity is unavailable")
     return state.state
+
+
+def _normalize_reading(value: str) -> str:
+    value = value.strip()
+    if value.isdigit():
+        return value
+    try:
+        number = float(value)
+    except ValueError as err:
+        raise HomeAssistantError("Reading must be a whole number") from err
+    if not number.is_integer() or number < 0:
+        raise HomeAssistantError("Reading must be a whole number")
+    return str(int(number))
 
 
 async def _async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -272,8 +280,8 @@ def _write_snapshot_gallery(gallery_path: Path, legacy_path: Path) -> None:
             legacy_snapshot.replace(target)
     snapshots = sorted(gallery_path.glob("meter_*.jpg"), reverse=True)
     image_cards = "\n".join(
-        f'<a href="{html.escape(image.name)}" target="_blank" rel="noopener">'
-        f'<img src="{html.escape(image.name)}" alt="{html.escape(image.stem)}"></a>'
+        f'<a href="/local/{GALLERY_DIRECTORY}/{html.escape(image.name)}" target="_blank" rel="noopener">'
+        f'<img src="/local/{GALLERY_DIRECTORY}/{html.escape(image.name)}" alt="{html.escape(image.stem)}"></a>'
         for image in snapshots
     ) or "<p>No submitted snapshots yet.</p>"
     index = f"""<!doctype html>
